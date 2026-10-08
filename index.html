@@ -412,9 +412,9 @@ function itensHTML(c){ const itens=(c.valor&&c.valor.length?c.valor:[{}]).concat
   return `<div class="field"><label>${esc(c.rotulo)}</label><div class="help" style="margin-bottom:8px">Preço final = o que o cliente paga pelo item. Margem = preço − custo − taxas.</div>`+itens.map((it,i)=>`<div class="itemrow"><div class="row">
   <div><label class="small" for="it${i}d">Item ${i+1}${i===0?' *':''}</label><input id="it${i}d" name="it${i}_descricao" value="${esc(it.descricao||'')}"${i===0?' required':''}></div>
   <div><label class="small" for="it${i}f">Fornecedor</label><input id="it${i}f" name="it${i}_fornecedor" value="${esc(it.fornecedor||'')}"></div></div>
-  <div class="row" style="margin-top:6px"><div><label class="small" for="it${i}c">Custo (R$)</label><input id="it${i}c" name="it${i}_custo" inputmode="decimal" value="${it.custo??''}"></div>
-  <div><label class="small" for="it${i}t">Taxas (R$)</label><input id="it${i}t" name="it${i}_taxas" inputmode="decimal" value="${it.taxas??''}"></div>
-  <div><label class="small" for="it${i}p">Preço final (R$)</label><input id="it${i}p" name="it${i}_preco" inputmode="decimal" value="${it.preco??''}"></div></div></div>`).join('')+`</div>`; }
+  <div class="row" style="margin-top:6px"><div><label class="small" for="it${i}c">Custo</label><input id="it${i}c" name="it${i}_custo" inputmode="decimal" value="${it.custo??''}"></div>
+  <div><label class="small" for="it${i}t">Taxas</label><input id="it${i}t" name="it${i}_taxas" inputmode="decimal" value="${it.taxas??''}"></div>
+  <div><label class="small" for="it${i}p">Preço final</label><input id="it${i}p" name="it${i}_preco" inputmode="decimal" value="${it.preco??''}"></div></div></div>`).join('')+`</div>`; }
 function lerForm(){ const fd=new FormData($('#modalForm')); const v={};
   for(const c of MODAL.campos){ if(c.tipo==='checks') v[c.nome]=fd.getAll(c.nome); else if(c.tipo==='itens'){ v[c.nome]=[0,1,2].map(i=>({descricao:(fd.get(`it${i}_descricao`)||'').trim(),fornecedor:(fd.get(`it${i}_fornecedor`)||'').trim(),custo:num(fd.get(`it${i}_custo`)),taxas:num(fd.get(`it${i}_taxas`)),preco:num(fd.get(`it${i}_preco`))})).filter(x=>x.descricao); } else if(c.nome) v[c.nome]=(fd.get(c.nome)??'').toString().trim(); }
   return v; }
@@ -534,11 +534,11 @@ const ACOES = {
 /* ------------------------------ CLIENTE ------------------------------ */
 cliente:[
   {id:'oportunidade', rotulo:'Nova oportunidade', quando:r=>can('lead.criar'), abrir:r=>abrirForm({titulo:'Nova oportunidade para '+r.nome, sub:'Cria o lead e abre a simulação.',
-    campos:[{tipo:'select',nome:'produto',rotulo:'Produto ou serviço',obrig:true,opcoes:produtosDa(S.sess.unidadeId).map(p=>[p.id,p.nome])},
-      {tipo:'select',nome:'canal',rotulo:'Canal',obrig:true,opcoes:optsLista(['WhatsApp','Chat do site','Formulário do site','Instagram','Telefone','E-mail','Presencial','Indicação'])},
+    campos:[{tipo:'select',nome:'produto',rotulo:'Produto ou serviço',obrig:true,opcoes:produtosDa(S.sess.unidadeId).map(p=>[p.id,(p.codigo?p.codigo+' · ':'')+p.nome+' — '+precoTxt(p,'BRL')+' / '+precoTxt(p,'EUR')])},
+      {tipo:'select',nome:'moeda',rotulo:'Moeda / país da venda',obrig:true,valor:'BRL',vazio:false,opcoes:Object.entries(MOEDAS),ajuda:'Define se a proposta sai em R$ (Brasil) ou € (Irlanda), com o preço de cada país.'},{tipo:'select',nome:'canal',rotulo:'Canal',obrig:true,opcoes:optsLista(['WhatsApp','Chat do site','Formulário do site','Instagram','Telefone','E-mail','Presencial','Indicação'])},
       {tipo:'text',nome:'origem',rotulo:'Origem',ajuda:'Campanha, indicação, anúncio…'},{tipo:'textarea',nome:'obs',rotulo:'Primeiras observações'}],
     ok:'Criar oportunidade', onSubmit:async v=>{ exigir(S.sess.unidadeId,'Escolha uma unidade no papel ativo para criar oportunidades.');
-      const l = await criar('lead',{clienteId:r.id, unidadeId:S.sess.unidadeId, produtoId:v.produto, canal:v.canal, origem:v.origem, responsavelId:eu(), vendedorId:eu(), status:'em_atendimento', fase:'simulacao', setor:'comercial', notas:v.obs?[{em:agoraISO(),por:eu(),papel:S.sess.papel,texto:v.obs}]:[], prazo:somaHoras(agoraISO(),prazoH('lead')), prazoDesde:agoraISO()});
+      const l = await criar('lead',{clienteId:r.id, unidadeId:S.sess.unidadeId, produtoId:v.produto, moeda:v.moeda||'BRL', canal:v.canal, origem:v.origem, responsavelId:eu(), vendedorId:eu(), status:'em_atendimento', fase:'simulacao', setor:'comercial', notas:v.obs?[{em:agoraISO(),por:eu(),papel:S.sess.papel,texto:v.obs}]:[], prazo:somaHoras(agoraISO(),prazoH('lead')), prazoDesde:agoraISO()});
       location.hash='#/r/'+l.id; return 'Oportunidade '+l.numero+' criada'; }})},
   {id:'protocolo', rotulo:'Abrir protocolo', quando:r=>can('protocolo.abrir'), abrir:r=>formProtocolo({clienteId:r.id})},
   {id:'editar', rotulo:'Corrigir dados', quando:r=>can('cliente.editar'), abrir:r=>abrirForm({titulo:'Corrigir dados de '+r.numero, sub:'O valor anterior fica guardado no histórico.',
@@ -577,9 +577,9 @@ proposta:[
 /* ------------------------------ PEDIDO ------------------------------ */
 pedido:[
   {id:'pagamento', rotulo:'Confirmar recebimento', quando:r=>['em_auditoria','devolvido','aprovado','em_execucao'].includes(r.status) && r.pagamento?.status!=='confirmado' && can('financeiro.confirmar',r),
-    abrir:r=>abrirForm({titulo:'Recebimento de '+r.numero, sub:'Valor do pedido: '+brl(r.preco), campos:[
+    abrir:r=>abrirForm({titulo:'Recebimento de '+r.numero, sub:'Valor do pedido: '+mo(r,r.preco), campos:[
       {tipo:'select',nome:'forma',rotulo:'Forma',obrig:true,opcoes:optsLista(['Pix','Cartão','Boleto','Transferência','Dinheiro'])},
-      {tipo:'text',nome:'valor',rotulo:'Valor recebido (R$)',obrig:true,valor:String(r.preco).replace('.',',')},
+      {tipo:'text',nome:'valor',rotulo:'Valor recebido ('+((r.moeda==='EUR')?'€':'R$')+')',obrig:true,valor:String(r.preco).replace('.',',')},
       {tipo:'text',nome:'final4',rotulo:'Últimos 4 dígitos do cartão',padrao:'\\d{4}',ajuda:'Só se for cartão. Nunca o número completo.'},
       {tipo:'text',nome:'comprovante',rotulo:'Comprovante (identificação)',obrig:true,ajuda:'Ex.: ID do Pix, NSU, nome do arquivo anexado.'}], ok:'Confirmar',
       onSubmit:async v=>{ const valor=num(v.valor); exigir(valor>0,'Informe o valor recebido.'); const st= valor+0.001>=r.preco?'confirmado':'parcial';
@@ -728,22 +728,22 @@ function totaisItens(itens){ const t=itens.reduce((a,i)=>({custo:a.custo+i.custo
 function formSimulacao(lead, base=null, novaVersao=false){
   const editar = base && !novaVersao;
   abrirForm({titulo: editar?'Editar '+base.numero+' v'+base.versao : (novaVersao?'Nova versão de '+base.numero:'Nova simulação — '+lead.numero), sub:'Simulação não autoriza pagamento nem emissão.',
-    campos:[{tipo:'itens',nome:'itens',rotulo:'Itens e opções',valor:base?.itens},{tipo:'date',nome:'validade',rotulo:'Válida até',obrig:true,valor:base?.validade||new Date(Date.now()+horas(72)).toISOString().slice(0,10)},
+    campos:[{tipo:'itens',nome:'itens',rotulo:'Itens e opções ('+((base||lead)?.moeda==='EUR'?'€':'R$')+')',valor:base?.itens||itensIniciais(lead)},{tipo:'date',nome:'validade',rotulo:'Válida até',obrig:true,valor:base?.validade||new Date(Date.now()+horas(72)).toISOString().slice(0,10)},
       {tipo:'textarea',nome:'premissas',rotulo:'Premissas',valor:base?.premissas,ajuda:'Datas, bagagem, tarifa sujeita a mudança, prazo de entrega…'}, ...(editar||novaVersao?[{tipo:'text',nome:'motivo',rotulo:'Motivo da alteração',obrig:true}]:[])],
     ok: editar?'Salvar':'Criar simulação', onSubmit:async v=>{ exigir(v.itens.length,'Inclua ao menos um item.'); exigir(v.itens.every(i=>i.preco>0),'Todo item precisa de preço final.');
       const t=totaisItens(v.itens); const dados={itens:v.itens,...t,validade:v.validade,premissas:v.premissas};
       if(editar){ await alterar(base,dados,'correcao',{motivo:v.motivo}); return 'Simulação atualizada'; }
       if(novaVersao){ await alterar(base,{status:'substituida'},'substituicao',{motivo:v.motivo,detalhe:'Substituída pela v'+(base.versao+1)});
-        const s=await criar('simulacao',{...dados, numero:base.numero, versao:base.versao+1, leadId:base.leadId, clienteId:base.clienteId, unidadeId:base.unidadeId, produtoId:base.produtoId, status:'rascunho', responsavelId:eu()},'Nova versão v'+(base.versao+1)+': '+v.motivo);
+        const s=await criar('simulacao',{...dados, numero:base.numero, versao:base.versao+1, moeda:base.moeda||'BRL', leadId:base.leadId, clienteId:base.clienteId, unidadeId:base.unidadeId, produtoId:base.produtoId, status:'rascunho', responsavelId:eu()},'Nova versão v'+(base.versao+1)+': '+v.motivo);
         location.hash='#/r/'+s.id; return base.numero+' v'+s.versao+' criada'; }
-      const s=await criar('simulacao',{...dados, versao:1, leadId:lead.id, clienteId:lead.clienteId, unidadeId:lead.unidadeId, produtoId:lead.produtoId, status:'rascunho', responsavelId:eu()});
+      const s=await criar('simulacao',{...dados, versao:1, moeda:lead.moeda||'BRL', leadId:lead.id, clienteId:lead.clienteId, unidadeId:lead.unidadeId, produtoId:lead.produtoId, status:'rascunho', responsavelId:eu()});
       if(lead.prazo || !lead.responsavelId) await alterar(lead,{prazo:null, responsavelId:lead.responsavelId||eu(), vendedorId:lead.vendedorId||eu()},'primeiro_contato',{motivo:'primeiro atendimento realizado'});
       location.hash='#/r/'+s.id; return 'Simulação '+s.numero+' criada'; }});
 }
 function formProposta(lead){ const sims=lista('simulacao').filter(s=>s.leadId===lead.id && s.status==='concluida');
   const pol=politica(lead.unidadeId, lead.produtoId, S.sess.papel);
   abrirForm({titulo:'Proposta — '+lead.numero, sub:`Desconto permitido sem aprovação: até ${pol.limitePct}%${pol.margemMinimaPct!=null?' e margem mínima de '+pol.margemMinimaPct+'%':''}.`,
-    campos:[{tipo:'checks',nome:'sims',rotulo:'Simulações incluídas',opcoes:sims.map(s=>[s.id,`${s.numero} v${s.versao} — ${brl(s.totalPreco)} (margem ${s.margemPct}%)`])},
+    campos:[{tipo:'checks',nome:'sims',rotulo:'Simulações incluídas',opcoes:sims.map(s=>[s.id,`${s.numero} v${s.versao} — ${mo(s,s.totalPreco)} (margem ${s.margemPct}%)`])},
       {tipo:'text',nome:'desconto',rotulo:'Desconto (%)',valor:'0'},{tipo:'textarea',nome:'condicoes',rotulo:'Condições de pagamento',obrig:true},{tipo:'date',nome:'validade',rotulo:'Válida até',obrig:true,valor:new Date(Date.now()+horas(48)).toISOString().slice(0,10)},
       {tipo:'textarea',nome:'just',rotulo:'Justificativa do desconto',ajuda:'Obrigatória se passar do limite ou da margem mínima.'}], ok:'Criar proposta',
     onSubmit:async v=>{ exigir(v.sims.length,'Escolha ao menos uma simulação.'); exigir(can('desconto.aplicar',lead)||num(v.desconto)===0,'Seu papel não aplica desconto.');
@@ -751,24 +751,24 @@ function formProposta(lead){ const sims=lista('simulacao').filter(s=>s.leadId===
       const d=num(v.desconto); exigir(d>=0&&d<100,'Desconto inválido.'); const total=Math.round(sub*(1-d/100)*100)/100; const margem=Math.round((total-custo)*100)/100; const margemPct=total?Math.round(margem/total*10000)/100:0;
       const fora = d>pol.limitePct || (pol.margemMinimaPct!=null && margemPct<pol.margemMinimaPct);
       if(fora) exigir(v.just && v.just.length>=5, `Desconto acima de ${pol.limitePct}% ou margem abaixo da mínima: escreva a justificativa para o supervisor.`);
-      const p=await criar('proposta',{leadId:lead.id, clienteId:lead.clienteId, unidadeId:lead.unidadeId, produtoId:lead.produtoId, simulacaoIds:v.sims, subtotal:Math.round(sub*100)/100, descontoPct:d, total, custo:Math.round(custo*100)/100, margem, margemPct, condicoes:v.condicoes, validade:v.validade, status:fora?'aguardando_aprovacao':'rascunho', responsavelId:eu(), vendedorId:lead.vendedorId});
+      const p=await criar('proposta',{moeda:lead.moeda||'BRL', leadId:lead.id, clienteId:lead.clienteId, unidadeId:lead.unidadeId, produtoId:lead.produtoId, simulacaoIds:v.sims, subtotal:Math.round(sub*100)/100, descontoPct:d, total, custo:Math.round(custo*100)/100, margem, margemPct, condicoes:v.condicoes, validade:v.validade, status:fora?'aguardando_aprovacao':'rascunho', responsavelId:eu(), vendedorId:lead.vendedorId});
       if(fora){ const ap=await pedirAprovacao('desconto', p, {descontoPct:d, limitePct:pol.limitePct, margemPct, margemMinimaPct:pol.margemMinimaPct, total}, v.just); await alterar(p,{aprovacaoId:ap.id},'solicitacao',{motivo:'desconto fora do limite',detalhe:ap.numero}); location.hash='#/r/'+p.id; return 'Proposta criada; desconto aguarda aprovação '+ap.numero; }
       location.hash='#/r/'+p.id; return 'Proposta '+p.numero+' criada'; }}); }
 const modalidadeRotulo = m => ({viagem:'Participantes (nomes conforme documento, nascimento)',entrega:'Endereço de entrega e frete',retirada:'Local e data da retirada',servico:'Data, local e profissional do serviço'})[m] || 'Detalhes';
 function formAceite(p){ const prod=produto(p.produtoId); const mods=(prod?.modalidades?.length?prod.modalidades:['entrega']);
-  abrirForm({titulo:'Aceite de '+p.numero+' — venda', sub:'Total '+brl(p.total)+'. Cria o pedido, que segue para auditoria antes de qualquer execução.',
+  abrirForm({titulo:'Aceite de '+p.numero+' — venda', sub:'Total '+mo(p,p.total)+'. Cria o pedido, que segue para auditoria antes de qualquer execução.',
     campos:[{tipo:'textarea',nome:'evid',rotulo:'Evidência do aceite',obrig:true,ajuda:'Ex.: print do WhatsApp anexado, e-mail de confirmação.'},{tipo:'select',nome:'canal',rotulo:'Aceite recebido por',obrig:true,opcoes:optsLista(['WhatsApp','E-mail','Presencial','Telefone'])},
       {tipo:'select',nome:'modalidade',rotulo:'Modalidade de atendimento',obrig:true,valor:mods[0],vazio:false,opcoes:mods.map(m=>[m,{viagem:'Viagem',entrega:'Entrega',retirada:'Retirada presencial',servico:'Serviço'}[m]])},
       {tipo:'textarea',nome:'detalhes',rotulo:'Detalhes da modalidade',obrig:true,ajuda:'Participantes, endereço, local de retirada ou agendamento do serviço. Documentos de passageiros: só número mascarado.'},
       {tipo:'textarea',nome:'promessa',rotulo:'O que foi prometido ao cliente',ajuda:'Bagagem, prazo de entrega, política de reembolso… A auditoria confere.'}], ok:'Registrar venda',
     onSubmit:async v=>{ await alterar(p,{status:'aceita',aceite:{evidencia:v.evid,canal:v.canal,em:agoraISO(),por:eu()},prazo:null},'aceite',{motivo:'aceite do cliente',detalhe:v.evid});
       const lead=get(p.leadId); if(lead) await alterar(lead,{status:'convertido',setor:'finalizado',prazo:null},'conversao',{motivo:'proposta aceita',detalhe:p.numero});
-      const ped=await criar('pedido',{campanha:get(p.leadId)?.campanha||null, protocoloOrigemId:get(p.leadId)?.protocoloOrigemId||null, propostaId:p.id, leadId:p.leadId, clienteId:p.clienteId, unidadeId:p.unidadeId, produtoId:p.produtoId, vendedorId:p.vendedorId||eu(), responsavelId:null, setor:'auditoria', status:'em_auditoria',
+      const ped=await criar('pedido',{moeda:p.moeda||'BRL', campanha:get(p.leadId)?.campanha||null, protocoloOrigemId:get(p.leadId)?.protocoloOrigemId||null, propostaId:p.id, leadId:p.leadId, clienteId:p.clienteId, unidadeId:p.unidadeId, produtoId:p.produtoId, vendedorId:p.vendedorId||eu(), responsavelId:null, setor:'auditoria', status:'em_auditoria',
         preco:p.total, custo:p.custo, margem:p.margem, condicoes:p.condicoes, modalidade:v.modalidade, detalhes:v.detalhes, promessa:v.promessa, pagamento:{status:'pendente'}, emissao:{status:'nao_solicitada'}, tarefas:[], notas:[], prazo:somaHoras(agoraISO(),prazoH('auditoria')), prazoDesde:agoraISO()},'Venda confirmada a partir de '+p.numero);
       location.hash='#/r/'+ped.id; return 'Venda registrada: pedido '+ped.numero+' em auditoria'; }}); }
 function formAuditoria(r){ const itens=[['preco','Preço e desconto conferem com a proposta aceita'],['margem','Margem respeita a política'],['dados','Dados do cliente e da modalidade corretos'],['autorizacao','Autorização do cliente registrada'],['promessa','Promessa feita é cumprível'],['documentos','Documentos necessários presentes']];
   abrirForm({titulo:'Auditoria de '+r.numero, sub:'Todos os itens marcados aprovam. Qualquer item pendente devolve ao vendedor com apontamento.',
-    campos:[{tipo:'info',html:`<p class="small">Preço ${brl(r.preco)} · margem ${brl(r.margem)} · pagamento ${esc(PAG[r.pagamento?.status]||'pendente')}<br>Promessa: ${esc(r.promessa||'—')}</p>`},{tipo:'checks',nome:'ok',rotulo:'Conferência',opcoes:itens},{tipo:'textarea',nome:'apontamento',rotulo:'Apontamento',ajuda:'Obrigatório para devolver.'}], ok:'Registrar auditoria',
+    campos:[{tipo:'info',html:`<p class="small">Preço ${mo(r,r.preco)} · margem ${mo(r,r.margem)} · pagamento ${esc(PAG[r.pagamento?.status]||'pendente')}<br>Promessa: ${esc(r.promessa||'—')}</p>`},{tipo:'checks',nome:'ok',rotulo:'Conferência',opcoes:itens},{tipo:'textarea',nome:'apontamento',rotulo:'Apontamento',ajuda:'Obrigatório para devolver.'}], ok:'Registrar auditoria',
     onSubmit:async v=>{ const aprov=v.ok.length===itens.length; exigir(aprov || v.apontamento,'Escreva o apontamento para devolver.');
       const aud={checklist:v.ok, apontamento:v.apontamento, por:eu(), em:agoraISO(), resultado:aprov?'aprovado':'devolvido'};
       if(aprov) await alterar(r,{status:'aprovado',setor:'operacao',responsavelId:null,auditoria:aud,auditorias:[...(r.auditorias||[]),aud],prazo:somaHoras(agoraISO(),prazoH('execucao')),prazoDesde:agoraISO()},'auditoria',{motivo:'auditoria aprovada',detalhe:'Aprovado para execução'});
@@ -858,7 +858,7 @@ function telaFunil(){
   leads.forEach(l=>{ const e=estagioVenda(l); if(e==='perdido') perdidos.push(l); else cols.find(c=>c.k===e)?.itens.push(l); });
   const card = l => { const ped=lista('pedido').find(p=>p.leadId===l.id && p.status!=='cancelado'); const ref=ped||l; const al=alertas(ref).concat(ped?[]:alertas(l));
     const prop=lista('proposta').filter(p=>p.leadId===l.id).sort((a,b)=>b.criadoEm.localeCompare(a.criadoEm))[0];
-    return `<a class="card" href="#/r/${ref.id}"><div class="num">${al.some(a=>a[0]==='bad')?'<span class="dot"></span>':''}${esc(ref.numero)}</div><div class="small">${esc(nomeCli(l))}</div><div class="small muted">${esc(produto(l.produtoId)?.nome||'')}${prop?' · '+brl(ped?ped.preco:prop.total):''}</div><div class="small muted">${esc(nomeP(ref.responsavelId||l.responsavelId))}</div></a>`; };
+    return `<a class="card" href="#/r/${ref.id}"><div class="num">${al.some(a=>a[0]==='bad')?'<span class="dot"></span>':''}${esc(ref.numero)}</div><div class="small">${esc(nomeCli(l))}</div><div class="small muted">${esc(produto(l.produtoId)?.nome||'')}${prop?' · '+mo(ped||prop, ped?ped.preco:prop.total):''}</div><div class="small muted">${esc(nomeP(ref.responsavelId||l.responsavelId))}</div></a>`; };
   return `<div class="pagehead"><div><h1>Funil comercial</h1><p class="muted">Da simulação à finalização. Itens com ponto vermelho estão vencidos.</p></div>${can('cliente.editar')?'<button class="btn primary" data-novocli="1">Novo cliente</button>':''}</div>
   <div class="board">${cols.map(c=>`<section class="col"><h3>${esc(c.n)} <span class="muted">${c.itens.length}</span></h3>${c.itens.map(card).join('')||'<p class="small muted">Vazio</p>'}</section>`).join('')}</div>
   ${perdidos.length?`<h2 style="margin:20px 0 10px">Perdidas e descartadas</h2>${tabelaCasos(perdidos)}`:''}
@@ -878,7 +878,7 @@ function telaAprovacoes(){ const aps=casosVisiveis().filter(r=>r.tipo==='aprovac
   <div class="tabs">${[['pendentes','Pendentes'],['minhas','Solicitadas por mim'],['decididas','Decididas']].map(([k,n])=>`<button data-aba="ap:${k}" class="${f===k?'on':''}">${n} (${g[k].length})</button>`).join('')}</div>${tabelaCasos(g[f].sort(ordPrazo),'Nenhuma aprovação aqui.')}`; }
 function telaPainel(){ const u=S.sess.unidadeId; const noEscopo=r=>!u||!r.unidadeId||r.unidadeId===u;
   const L=lista('lead').filter(noEscopo), P=lista('proposta').filter(noEscopo), D=lista('pedido').filter(noEscopo), R=lista('protocolo').filter(noEscopo), E=lista('externa').filter(noEscopo);
-  const vendas=D.filter(p=>p.status!=='cancelado'); const fat=vendas.filter(p=>p.pagamento?.status!=='reembolsado').reduce((a,p)=>a+p.preco,0), mg=vendas.reduce((a,p)=>a+(p.margem||0),0);
+  const vendas=D.filter(p=>p.status!=='cancelado'); const emBRL=p=>(p.moeda||'BRL')==='BRL'; const fat=vendas.filter(p=>emBRL(p)&&p.pagamento?.status!=='reembolsado').reduce((a,p)=>a+p.preco,0), fatEUR=vendas.filter(p=>!emBRL(p)&&p.pagamento?.status!=='reembolsado').reduce((a,p)=>a+p.preco,0), mg=vendas.filter(emBRL).reduce((a,p)=>a+(p.margem||0),0);
   const enviadas=P.filter(p=>['enviada','aceita','recusada'].includes(p.status)); const conv=L.length?Math.round(vendas.length/L.length*100):0;
   const abertos=R.filter(p=>p.status!=='encerrado'); const venc=S.recs.filter(r=>CASOS.includes(r.tipo)&&noEscopo(r)&&alertas(r).some(a=>a[0]==='bad'));
   const tResp=R.filter(p=>p.primeiraRespostaEm).map(p=>(new Date(p.primeiraRespostaEm)-new Date(p.criadoEm))/36e5); const tMed=tResp.length?(tResp.reduce((a,b)=>a+b,0)/tResp.length).toFixed(1).replace('.',','):'—';
@@ -890,7 +890,7 @@ function telaPainel(){ const u=S.sess.unidadeId; const noEscopo=r=>!u||!r.unidad
   const porSetor={}; S.recs.filter(r=>['pedido','protocolo','externa'].includes(r.tipo)&&noEscopo(r)&&aberto(r)).forEach(r=>porSetor[r.setor]=(porSetor[r.setor]||0)+1);
   const k=(v,t)=>`<div class="kpi"><b>${v}</b><span>${t}</span></div>`;
   return `<div class="pagehead"><div><h1>Painel do supervisor</h1><p class="muted">${u?esc(unidade(u)?.nome):'Todas as unidades'} · dados de teste acumulados</p></div></div>
-  <div class="kpis">${k(L.length,'Leads recebidos')}${k(enviadas.length,'Propostas enviadas')}${k(conv+'%','Conversão lead → venda')}${k(vendas.length,'Vendas')}${k(brl(fat),'Faturamento')}${k(brl(mg),'Margem')}${k(abertos.length,'Protocolos abertos')}${k(tMed+(tMed==='—'?'':' h'),'1ª resposta, média')}${k(R.filter(p=>['resolvido','encerrado'].includes(p.status)).length,'Resolvidos')}${k(venc.length,'Vencidos')}</div>
+  <div class="kpis">${k(L.length,'Leads recebidos')}${k(enviadas.length,'Propostas enviadas')}${k(conv+'%','Conversão lead → venda')}${k(vendas.length,'Vendas')}${k(brl(fat),'Faturamento (R$)')}${k(svMoney(fatEUR,'EUR'),'Faturamento (€)')}${k(brl(mg),'Margem (R$)')}${k(abertos.length,'Protocolos abertos')}${k(tMed+(tMed==='—'?'':' h'),'1ª resposta, média')}${k(R.filter(p=>['resolvido','encerrado'].includes(p.status)).length,'Resolvidos')}${k(venc.length,'Vencidos')}</div>
   <div class="grid g2"><section class="panel"><h2>Onde perdemos vendas</h2><p class="small muted">Oportunidades que chegaram a cada etapa.</p><div class="bars">${acum.map(([n,v])=>`<div class="bar"><span>${esc(n)}</span><div class="track"><div class="fill" style="width:${v/max*100}%"></div></div><b>${v}</b></div>`).join('')}</div>
     ${Object.keys(perdas).length?'<h3 style="margin-top:12px">Motivos de perda</h3><ul class="small">'+Object.entries(perdas).sort((a,b)=>b[1]-a[1]).map(([m,n])=>`<li>${esc(m)}: ${n}</li>`).join('')+'</ul>':''}</section>
   <section class="panel"><h2>Vencidos e parados</h2>${venc.length?tabelaCasos(venc.sort(ordPrazo).slice(0,8)):'<p class="muted">Nada vencido.</p>'}</section>
@@ -981,10 +981,10 @@ function fatos(r){ const F=[]; const f=(k,v)=>F.push(`<div><dt>${k}</dt><dd>${v}
   else { if(r.unidadeId) f('Unidade',esc(unidade(r.unidadeId)?.nome)); if(r.produtoId) f('Produto',esc(produto(r.produtoId)?.nome)); if(r.setor) f('Setor atual',esc(SETORES[r.setor]||(r.setor==='aprovacoes'?'Aprovações':r.setor)));
     f('Responsável atual',esc(nomeP(r.responsavelId))); if(r.vendedorId && r.vendedorId!==r.responsavelId) f('Vendedor',esc(nomeP(r.vendedorId))); f('Prazo',r.prazo?fmtData(r.prazo)+(r.pausadoEm?' (pausado)':''):'—');
     f('Aberto em',fmtData(r.criadoEm)+' por '+esc(nomeP(r.criadoPor))); f('Última alteração',fmtData(r.atualizadoEm)); }
-  if(r.tipo==='pedido'){ f('Preço confirmado',brl(r.preco)); f('Margem',brl(r.margem)); f('Pagamento',esc(PAG[r.pagamento?.status]||'Pendente')+(r.pagamento?.forma?' · '+esc(r.pagamento.forma):'')); f('Modalidade',esc({viagem:'Viagem',entrega:'Entrega',retirada:'Retirada presencial',servico:'Serviço'}[r.modalidade]||'—')); f('Ordem de Serviço',esc(r.os||'Ainda não gerada')); f('Emissão/contratação',esc(r.emissao?.status||'—')+(r.emissao?.localizador?' · '+esc(r.emissao.localizador):'')); }
-  if(r.tipo==='protocolo'){ f('Módulo',esc(r.modulo?MODULOS[r.modulo].nome:'Geral')); f('Origem',r.origem==='site'?'Site (cliente)':'Equipe'); f('Canal',esc(r.canal)); f('Categoria',esc(r.categoria)); f('Prioridade',esc({alta:'Alta',media:'Média',baixa:'Baixa'}[r.prioridade])); f('Nível',esc(SETORES[r.nivel])); f('Reaberturas',r.reaberturas||0); if(r.reembolso) f('Reembolso',brl(r.reembolso.valor)+' · '+esc(r.reembolso.status)); }
-  if(r.tipo==='proposta'){ f('Subtotal',brl(r.subtotal)); f('Desconto',r.descontoPct+'%'); f('Total',brl(r.total)); f('Margem',brl(r.margem)+' ('+r.margemPct+'%)'); f('Válida até',fmtDia(r.validade)); }
-  if(r.tipo==='simulacao'){ f('Versão','v'+r.versao); f('Custo',brl(r.totalCusto)); f('Taxas',brl(r.totalTaxas)); f('Preço final',brl(r.totalPreco)); f('Margem',brl(r.margem)+' ('+r.margemPct+'%)'); f('Válida até',fmtDia(r.validade)); }
+  if(r.tipo==='pedido'){ f('Preço confirmado',mo(r,r.preco)); f('Margem',mo(r,r.margem)); f('Pagamento',esc(PAG[r.pagamento?.status]||'Pendente')+(r.pagamento?.forma?' · '+esc(r.pagamento.forma):'')); f('Modalidade',esc({viagem:'Viagem',entrega:'Entrega',retirada:'Retirada presencial',servico:'Serviço'}[r.modalidade]||'—')); f('Ordem de Serviço',esc(r.os||'Ainda não gerada')); f('Emissão/contratação',esc(r.emissao?.status||'—')+(r.emissao?.localizador?' · '+esc(r.emissao.localizador):'')); }
+  if(r.tipo==='protocolo'){ f('Módulo',esc(r.modulo?MODULOS[r.modulo].nome:'Geral')); f('Origem',r.origem==='site'?'Site (cliente)':'Equipe'); f('Canal',esc(r.canal)); f('Categoria',esc(r.categoria)); f('Prioridade',esc({alta:'Alta',media:'Média',baixa:'Baixa'}[r.prioridade])); f('Nível',esc(SETORES[r.nivel])); f('Reaberturas',r.reaberturas||0); if(r.reembolso) f('Reembolso',mo(r,r.reembolso.valor)+' · '+esc(r.reembolso.status)); }
+  if(r.tipo==='proposta'){ f('Subtotal',mo(r,r.subtotal)); f('Desconto',r.descontoPct+'%'); f('Total',mo(r,r.total)); f('Margem',mo(r,r.margem)+' ('+r.margemPct+'%)'); f('Válida até',fmtDia(r.validade)); }
+  if(r.tipo==='simulacao'){ f('Versão','v'+r.versao); f('Custo',mo(r,r.totalCusto)); f('Taxas',mo(r,r.totalTaxas)); f('Preço final',mo(r,r.totalPreco)); f('Margem',mo(r,r.margem)+' ('+r.margemPct+'%)'); f('Válida até',fmtDia(r.validade)); }
   if(r.tipo==='externa'){ f('Órgão',esc(r.orgao)); f('Nº no órgão',esc(r.numeroExterno)); f('Link',r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener">abrir</a>`:'—'); }
   if(r.tipo==='aprovacao'){ f('Registro',`<a href="#/r/${r.refId}">${esc(r.refNumero)}</a>`); f('Solicitante',esc(nomeP(r.solicitanteId))+' ('+esc(PAPEIS[r.papelSolicitante])+')'); f('Etapas',esc(r.requer.map(p=>PAPEIS[p]).join(' → '))); }
   if(r.tipo==='lead'){ f('Canal',esc(r.canal||'—')); f('Origem',esc(r.origem||'—')); }
@@ -992,7 +992,7 @@ function fatos(r){ const F=[]; const f=(k,v)=>F.push(`<div><dt>${k}</dt><dd>${v}
   return `<dl class="facts">${F.join('')}</dl>`; }
 function detalhes(r){ const S2=[];
   if(r.tipo==='cliente'){ const casos=S.recs.filter(x=>x.clienteId===r.id && CASOS.includes(x.tipo) && x.tipo!=='simulacao' && visivel(x)); S2.push(`<h2 style="margin-bottom:8px">Oportunidades, pedidos e protocolos</h2>${tabelaCasos(casos.sort((a,b)=>b.criadoEm.localeCompare(a.criadoEm)),'Nenhum caso deste cliente.')}`); }
-  if(r.tipo==='simulacao'){ S2.push(`<div class="alert info">Simulação não autoriza pagamento nem emissão.</div><div class="tablewrap"><table><thead><tr><th>Item</th><th>Fornecedor</th><th>Custo</th><th>Taxas</th><th>Preço final</th></tr></thead><tbody>${(r.itens||[]).map(i=>`<tr><td>${esc(i.descricao)}</td><td>${esc(i.fornecedor||'—')}</td><td>${brl(i.custo)}</td><td>${brl(i.taxas)}</td><td>${brl(i.preco)}</td></tr>`).join('')}</tbody></table></div>${r.premissas?`<p><b>Premissas:</b> ${esc(r.premissas)}</p>`:''}`); }
+  if(r.tipo==='simulacao'){ S2.push(`<div class="alert info">Simulação não autoriza pagamento nem emissão.</div><div class="tablewrap"><table><thead><tr><th>Item</th><th>Fornecedor</th><th>Custo</th><th>Taxas</th><th>Preço final</th></tr></thead><tbody>${(r.itens||[]).map(i=>`<tr><td>${esc(i.descricao)}</td><td>${esc(i.fornecedor||'—')}</td><td>${mo(r,i.custo)}</td><td>${mo(r,i.taxas)}</td><td>${mo(r,i.preco)}</td></tr>`).join('')}</tbody></table></div>${r.premissas?`<p><b>Premissas:</b> ${esc(r.premissas)}</p>`:''}`); }
   if(r.tipo==='lead'){ if(r.preVenda) S2.push(`<section class="panel"><h2>Pré-venda</h2><p><b>Necessidades:</b> ${esc(r.preVenda.necessidades)}</p><p><b>Documentos e dados:</b> ${esc(r.preVenda.documentos||'—')}</p><p><b>Pendências:</b> ${esc(r.preVenda.pendencias||'—')}</p></section>`);
     const sims=lista('simulacao').filter(s=>s.leadId===r.id).sort((a,b)=>a.numero.localeCompare(b.numero)||a.versao-b.versao); S2.push(`<h2 style="margin:14px 0 8px">Simulações</h2>${tabelaCasos(sims,'Nenhuma simulação. Use "Nova simulação".')}`);
     S2.push(`<h2 style="margin:14px 0 8px">Propostas</h2>${tabelaCasos(lista('proposta').filter(p=>p.leadId===r.id),'Nenhuma proposta.')}`); }
@@ -1321,7 +1321,7 @@ const descRegra = r => [r.pessoaId?nomeP(r.pessoaId):'', r.produtoId?produto(r.p
 /* ---------- Business / Benefícios ---------- */
 function elegibilidade(clienteId, beneficioId){ const ad=lista('adesao').filter(a=>a.clienteId===clienteId && a.status==='ativa');
   if(!ad.length) return {ok:false, motivo:'Cliente sem plano ativo.'};
-  for(const a of ad){ const pl=get(a.planoId); const item=(pl?.beneficios||[]).find(b=>b.beneficioId===beneficioId); if(!item) continue;
+  for(const a of ad){ const pl=get(a.planoId); if(pl && pl.ativo===false) continue; const item=(pl?.beneficios||[]).find(b=>b.beneficioId===beneficioId); if(!item) continue;
     const ini=new Date(); if(item.periodo==='ano'){ ini.setMonth(0,1); } else ini.setDate(1); ini.setHours(0,0,0,0);
     const usados=lista('autorizacao').filter(x=>x.clienteId===clienteId && x.beneficioId===beneficioId && ['autorizada','enviada_parceiro','utilizada','concluida'].includes(x.status) && new Date(x.criadoEm)>=ini).length;
     if(Number(item.limite)>0 && usados>=Number(item.limite)) return {ok:false, motivo:`Limite do plano ${pl.nome} atingido: ${usados}/${item.limite} por ${item.periodo==='ano'?'ano':'mês'}.`, planoId:pl.id};
@@ -1425,7 +1425,7 @@ function telaComissoes(){ const cs=lista('comissao').filter(c=>(!S.sess.unidadeI
   ${can('config.editar')?`<h2 style="margin:18px 0 8px">Regras</h2><ul>${lista('regracom').map(r=>`<li>${esc(descRegra(r))}${r.ativa===false?' <span class="chip">Inativa</span>':''}</li>`).join('')||'<li class="muted">Nenhuma regra: as comissões ficam em R$ 0,00.</li>'}</ul><p class="small muted">A regra mais específica vale: funcionário &gt; campanha &gt; produto &gt; unidade &gt; padrão.</p>`:''}`; }
 function relatorioComissoes(){ const u=S.sess.unidadeId; const cs=lista('comissao').filter(c=>!u||c.unidadeId===u); const ps=lista('pedido').filter(p=>!u||p.unidadeId===u);
   const s=st=>brl(cs.filter(c=>st.includes(c.status)).reduce((a,c)=>a+c.valor,0));
-  return `<section class="panel" style="margin-top:16px"><h2>Vendas e comissões</h2><div class="kpis" style="margin-top:10px"><div class="kpi"><b>${ps.filter(p=>p.status!=='cancelado').length}</b><span>Vendas</span></div><div class="kpi"><b>${brl(ps.filter(p=>p.status!=='cancelado').reduce((a,p)=>a+p.preco,0))}</b><span>Faturamento</span></div>
+  return `<section class="panel" style="margin-top:16px"><h2>Vendas e comissões</h2><div class="kpis" style="margin-top:10px"><div class="kpi"><b>${ps.filter(p=>p.status!=='cancelado').length}</b><span>Vendas</span></div><div class="kpi"><b>${brl(ps.filter(p=>p.status!=='cancelado'&&(p.moeda||'BRL')==='BRL').reduce((a,p)=>a+p.preco,0))}</b><span>Faturamento (R$)</span></div><div class="kpi"><b>${svMoney(ps.filter(p=>p.status!=='cancelado'&&p.moeda==='EUR').reduce((a,p)=>a+p.preco,0),'EUR')}</b><span>Faturamento (€)</span></div>
   <div class="kpi"><b>${s(['prevista','aguardando_confirmacao'])}</b><span>Comissão prevista</span></div><div class="kpi"><b>${s(['liberada'])}</b><span>Liberada (a pagar)</span></div><div class="kpi"><b>${s(['paga'])}</b><span>Paga</span></div><div class="kpi"><b>${ps.filter(p=>p.status==='cancelado').length}</b><span>Cancelamentos</span></div></div></section>`; }
 function visivelLog(r){ const s=S.sess; if(!s) return false; if(s.papel==='administrador') return true; if(s.unidadeId && r.unidadeId && r.unidadeId!==s.unidadeId) return false;
   if(s.papel==='supervisor') return true; return r.criadoPor===eu() || r.responsavelId===eu() || meusSetores().includes(r.setor); }
@@ -1911,10 +1911,10 @@ function telaDashboard(){ const s=S.sess; const u=s.unidadeId; const noEscopo=r=
   <h2 style="margin-bottom:8px">Comigo</h2><div class="kpis">${k(fila.length,'Minha fila','#/fila')}${k(fila.filter(r=>alertas(r).some(a=>a[0]==='bad')).length,'Vencidos na minha fila','#/fila','danger')}${k(pend.length,'Tarefas e pendências','#/tarefas')}${k(nl,'Notificações não lidas','#/notificacoes',nl?'warn':'')}${minhasAprov?k(minhasAprov,'Aprovações aguardando você','#/aprovacoes','warn'):''}${can('prospeccao.trabalhar')?k(lista('prospect').filter(p=>p.responsavelId===eu()&&PROS_ABERTOS.includes(p.status)).length,'Meus leads abertos','#/prospeccao'):''}${can('comissao.ver')?k(brl(lista('comissao').filter(c=>c.vendedorId===eu()&&['prevista','aguardando_confirmacao','liberada'].includes(c.status)).reduce((a,c)=>a+c.valor,0)),'Minhas comissões a receber','#/comissoes'):''}</div>`;
   if(gestor){ const R=lista('protocolo').filter(noEscopo), D=lista('pedido').filter(noEscopo), C=lista('comissao').filter(noEscopo); const abertos=casosVisiveis().filter(r=>noEscopo(r)&&aberto(r)&&r.status!=='resolvido'&&!['simulacao','proposta','prospect'].includes(r.tipo));
     const hoje=new Date().toISOString().slice(0,10), mes=hoje.slice(0,7); const venc=abertos.filter(r=>sla(r)?.nivel==='bad'); const comPrazo=abertos.filter(r=>sla(r)); const dentro=comPrazo.length?Math.round((comPrazo.length-venc.length)/comPrazo.length*100):100;
-    const vendasMes=D.filter(p=>p.status!=='cancelado'&&String(p.criadoEm).startsWith(mes)); const fat=vendasMes.filter(p=>p.pagamento?.status!=='reembolsado').reduce((a,p)=>a+p.preco,0);
+    const vendasMes=D.filter(p=>p.status!=='cancelado'&&String(p.criadoEm).startsWith(mes)); const fat=vendasMes.filter(p=>(p.moeda||'BRL')==='BRL'&&p.pagamento?.status!=='reembolsado').reduce((a,p)=>a+p.preco,0), fatEUR=vendasMes.filter(p=>p.moeda==='EUR'&&p.pagamento?.status!=='reembolsado').reduce((a,p)=>a+p.preco,0);
     const prod={}; const sete=Date.now()-7*864e5; S.recs.filter(r=>noEscopo(r)&&r.responsavelId).forEach(r=>{ const fim=r.tipo==='protocolo'&&r.resolvidoEm&&new Date(r.resolvidoEm).getTime()>=sete || r.tipo==='pedido'&&['entregue','concluido'].includes(r.status)&&new Date(r.atualizadoEm).getTime()>=sete || r.tipo==='tarefa'&&r.status==='feita'&&new Date(r.concluidaEm).getTime()>=sete; const x=prod[r.responsavelId] ||= {abertos:0,feitos:0,venc:0}; if(aberto(r)&&r.status!=='resolvido'&&!['simulacao','proposta','prospect'].includes(r.tipo)){ x.abertos++; if(sla(r)?.nivel==='bad') x.venc++; } if(fim) x.feitos++; });
     h+=`<h2 style="margin:6px 0 8px">Operação</h2><div class="kpis">${k(abertos.length,'Em aberto','#/atendimento')}${k(abertos.filter(r=>!r.responsavelId).length,'Sem responsável','#/atendimento','warn')}${k(venc.length,'SLA vencido','#/atendimento','danger')}${k(dentro+'%','Dentro do SLA','#/atendimento')}${k(R.filter(p=>String(p.criadoEm).startsWith(hoje)).length,'Atendimentos abertos hoje','#/atendimento')}${k(R.filter(p=>p.resolvidoEm&&String(p.resolvidoEm).startsWith(hoje)).length,'Resolvidos hoje','#/atendimento')}${k(lista('aprovacao').filter(a=>noEscopo(a)&&a.status==='pendente').length,'Aprovações pendentes','#/aprovacoes')}${k(lista('tarefa').filter(t=>noEscopo(t)&&t.status==='aberta').length+lista('protocolo').filter(noEscopo).reduce((a,p)=>a+(p.pendencias||[]).filter(x=>!x.resolvida).length,0),'Tarefas e pendências abertas','#/tarefas')}</div>
-    <h2 style="margin:6px 0 8px">Vendas e comissões · ${esc(new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))}</h2><div class="kpis">${k(vendasMes.length,'Vendas no mês','#/funil')}${k(brl(fat),'Faturamento no mês','#/painel')}${k(lista('lead').filter(l=>noEscopo(l)&&['novo','em_atendimento','qualificado'].includes(l.status)).length,'Oportunidades abertas','#/funil')}${k(lista('prospect').filter(p=>noEscopo(p)&&PROS_ABERTOS.includes(p.status)).length,'Leads de prospecção abertos','#/prospeccao')}${k(brl(C.filter(c=>['prevista','aguardando_confirmacao'].includes(c.status)).reduce((a,c)=>a+c.valor,0)),'Comissão prevista','#/comissoes')}${k(brl(C.filter(c=>c.status==='liberada').reduce((a,c)=>a+c.valor,0)),'Comissão a pagar','#/comissoes')}</div>
+    <h2 style="margin:6px 0 8px">Vendas e comissões · ${esc(new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))}</h2><div class="kpis">${k(vendasMes.length,'Vendas no mês','#/funil')}${k(brl(fat),'Faturamento no mês (R$)','#/painel')}${k(svMoney(fatEUR,'EUR'),'Faturamento no mês (€)','#/painel')}${k(lista('lead').filter(l=>noEscopo(l)&&['novo','em_atendimento','qualificado'].includes(l.status)).length,'Oportunidades abertas','#/funil')}${k(lista('prospect').filter(p=>noEscopo(p)&&PROS_ABERTOS.includes(p.status)).length,'Leads de prospecção abertos','#/prospeccao')}${k(brl(C.filter(c=>['prevista','aguardando_confirmacao'].includes(c.status)).reduce((a,c)=>a+c.valor,0)),'Comissão prevista','#/comissoes')}${k(brl(C.filter(c=>c.status==='liberada').reduce((a,c)=>a+c.valor,0)),'Comissão a pagar','#/comissoes')}</div>
     <div class="grid g2"><section class="panel"><h2>Agir agora</h2>${venc.length?tabelaCasos(venc.sort(ordCentral).slice(0,6)):'<p class="muted">Nada com SLA vencido.</p>'}</section>
     <section class="panel"><h2>Produtividade (7 dias)</h2>${Object.keys(prod).length?`<table><thead><tr><th>Pessoa</th><th>Em aberto</th><th>Vencidos</th><th>Concluídos</th></tr></thead><tbody>${Object.entries(prod).sort((a,b)=>b[1].feitos-a[1].feitos).map(([p,x])=>`<tr><td>${esc(nomeP(p))}</td><td>${x.abertos}</td><td>${x.venc?'<span class="chip bad">'+x.venc+'</span>':'0'}</td><td>${x.feitos}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">Sem casos atribuídos.</p>'}</section></div>`; }
   else { h+=`<section class="panel"><h2>Próximos da minha fila</h2>${fila.length?tabelaCasos(fila.slice(0,8)):'<p class="muted">Fila vazia.</p>'}</section>`; }
@@ -2074,11 +2074,11 @@ function svPdf(r){
   if(ehPedido){
     const prop = get(r.propostaId);
     secao('Serviço contratado');
-    campo('Serviço', prod?.nome); campo('Modalidade', SV_MODS[r.modalidade]||r.modalidade); campo('Detalhes', r.detalhes); campo('Condições', r.condicoes||prop?.condicoes); campo('Combinado com o cliente', r.promessa);
+    campo('Serviço', prod?((prod.codigo?prod.codigo+' · ':'')+prod.nome):null); campo('Modalidade', SV_MODS[r.modalidade]||r.modalidade); campo('Detalhes', r.detalhes); campo('Condições', r.condicoes||prop?.condicoes); campo('Combinado com o cliente', r.promessa);
     if(prop?.validade) campo('Validade da proposta', prop.validade); y+=3;
     secao('Valores');
-    if(prop && prop.descontoPct) { campo('Subtotal', brl(prop.subtotal)); campo('Desconto', prop.descontoPct+'%'); }
-    quebra(12); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...tinta); doc.text('Total', M, y); doc.text(brl(r.preco), W-M, y, {align:'right'}); y+=6;
+    if(prop && prop.descontoPct) { campo('Subtotal', mo(r,prop.subtotal)); campo('Desconto', prop.descontoPct+'%'); }
+    quebra(12); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...tinta); doc.text('Total', M, y); doc.text(mo(r,r.preco), W-M, y, {align:'right'}); y+=6;
     campo('Pagamento', (PAG[r.pagamento?.status]||'Pendente')+(r.pagamento?.forma?' · '+r.pagamento.forma:''));
     campo('Ordem de Serviço', r.os); campo('Localizador', r.emissao?.localizador); y+=14;
     quebra(26); doc.setDrawColor(...cinza); doc.line(M, y, M+75, y); doc.line(W-M-75, y, W-M, y);
@@ -2107,11 +2107,11 @@ function svOrigens(){ const u=S.sess?.unidadeId; const noEsc=r=>!u||!r.unidadeId
   const canalDe=r=>{ const c=r.canal||'Não informado'; return c==='Site'?'Formulário do site':c; };
   const cont={}; const add=(r,k)=>{ const c=canalDe(r); (cont[c] ||= {prot:0,lead:0,venda:0,valor:0})[k]++; };
   prs.forEach(r=>add(r,'prot')); lds.forEach(r=>add(r,'lead'));
-  peds.forEach(p=>{ const l=get(p.leadId); const c=canalDe(l||p); const x=(cont[c] ||= {prot:0,lead:0,venda:0,valor:0}); x.venda++; x.valor+=p.preco||0; });
+  peds.forEach(p=>{ const l=get(p.leadId); const c=canalDe(l||p); const x=(cont[c] ||= {prot:0,lead:0,venda:0,valor:0}); x.venda++; if(p.moeda==='EUR') x.eur=(x.eur||0)+(p.preco||0); else x.valor+=p.preco||0; });
   const ls=Object.entries(cont).sort((a,b)=>(b[1].prot+b[1].lead)-(a[1].prot+a[1].lead)); const max=Math.max(1,...ls.map(([,x])=>x.prot+x.lead));
   return `<section class="panel" style="margin-top:16px"><h2>De onde vêm os atendimentos</h2><p class="small muted">Canal registrado em cada protocolo e oportunidade. Use "Chat do site" e "Formulário do site" para o que chega pelo 3treeuniverse.com.</p>
   ${ls.length?`<div class="bars" style="margin-top:10px">${ls.map(([c,x])=>`<div class="bar"><span>${esc(c)}</span><div class="track"><div class="fill" style="width:${(x.prot+x.lead)/max*100}%"></div></div><b>${x.prot+x.lead}</b></div>`).join('')}</div>
-  <div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Canal</th><th>Protocolos</th><th>Oportunidades</th><th>Vendas</th><th>Faturamento</th></tr></thead><tbody>${ls.map(([c,x])=>`<tr><td>${esc(c)}</td><td>${x.prot}</td><td>${x.lead}</td><td>${x.venda}</td><td class="num">${brl(x.valor)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Ainda não há atendimentos registrados.</p>'}</section>`; }
+  <div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Canal</th><th>Protocolos</th><th>Oportunidades</th><th>Vendas</th><th>Faturamento (R$)</th><th>Faturamento (€)</th></tr></thead><tbody>${ls.map(([c,x])=>`<tr><td>${esc(c)}</td><td>${x.prot}</td><td>${x.lead}</td><td>${x.venda}</td><td class="num">${brl(x.valor)}</td><td class="num">${svMoney(x.eur||0,'EUR')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Ainda não há atendimentos registrados.</p>'}</section>`; }
 const svPainelBase = telaPainel; telaPainel = function(){ return svPainelBase() + svOrigens(); };
 const svDashBase = telaDashboard; telaDashboard = function(){ const h=svDashBase(); return (can('painel.ver')||S.sess?.papel==='administrador') ? h + svOrigens() : h; };
 
@@ -2143,6 +2143,174 @@ render = function(){
     S.rota = location.hash; $('#app').innerHTML = layout(telaServicos()); svMarca(); return; }
   svRenderBase(); svMarca();
 };
+</script>
+
+<script>
+"use strict";
+/* =====================================================================
+   Catálogo comercial (out/2026)
+   - Preço independente em R$ (Brasil) e € (Irlanda), sem conversão
+   - Código interno, categoria, descrições PT/EN, cobrança, situação
+   - Situação: ativo (vende) · rascunho · aguardando parceiro · inativo
+   - Importação/atualização em lote por código, sem duplicar
+     e sem trocar preço já cadastrado sem autorização
+   - Moeda acompanha oportunidade → simulação → proposta → pedido → PDF
+   ===================================================================== */
+const CAT_COM = ['TriSolution','3TreeUniverse Business','3Tree Music','TriUniverse Travel','Currículos e recrutamento','Tecnologia e IA','Internet e telefonia','Casting, modelos e artistas','Assinaturas e benefícios TriClube'];
+const CAT_PREFIXO = {'TriSolution':'TSOL','3TreeUniverse Business':'BIZ','3Tree Music':'MUS','TriUniverse Travel':'TRV','Currículos e recrutamento':'CV','Tecnologia e IA':'TEC','Internet e telefonia':'TEL','Casting, modelos e artistas':'CAS','Assinaturas e benefícios TriClube':'CLB'};
+const SIT = {ativo:'Ativo', rascunho:'Rascunho', aguardando_parceiro:'Aguardando parceiro', inativo:'Inativo'};
+const SIT_CHIP = {ativo:'ok', rascunho:'', aguardando_parceiro:'warn', inativo:'bad'};
+const COBR = {unica:'Única', hora:'Por hora', mensal:'Mensal', por_pessoa:'Por pessoa', por_reserva:'Por reserva', gratuito:'Gratuito'};
+const COBR_ANTIGA = {'por pessoa':'por_pessoa','por reserva':'por_reserva','por noite':'unica','por dia':'unica','valor fechado':'unica'};
+const MOEDAS = {BRL:'R$ · Brasil', EUR:'€ · Irlanda'};
+const sitDe = p => p.status || (p.ativo===false ? 'inativo' : 'ativo');
+const cobrDe = p => COBR[p.cobranca] ? p.cobranca : (COBR_ANTIGA[p.cobranca] || (p.cobranca ? 'unica' : ''));
+const precoDe = (p, m) => m==='EUR' ? (p.precoEUR ?? null) : (p.precoBRL ?? p.precoBase ?? null);
+const custoDe = (p, m) => m==='EUR' ? (p.custoEUR ?? null) : (p.custoBRL ?? p.custoBase ?? null);
+function svMoney(n, moeda){ if(n==null || n==='') return 'Preço pendente'; return (Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:moeda==='EUR'?'EUR':'BRL'}); }
+function mo(r, n){ return svMoney(n, (r&&r.moeda)||'BRL'); }
+const precoTxt = (p, m) => { const v=precoDe(p,m); if(v===0 && cobrDe(p)==='gratuito') return 'Gratuito'; return svMoney(v,m); };
+const svNumPreco = v => { const s=String(v??'').trim(); if(!s || /pendente|^-$|^—$/i.test(s)) return null; if(/gratuito|free|gr[aá]tis/i.test(s)) return 0;
+  const limpo=s.replace(/[R$€\s]/g,''); const n = limpo.includes(',') ? num(limpo) : Math.round(Number(limpo)*100)/100; return Number.isFinite(n) ? n : NaN; };
+function proximoCodigo(cat){ const pre=CAT_PREFIXO[cat]||'PRD'; const ns=lista('produto').map(p=>String(p.codigo||'')).filter(c=>c.startsWith(pre+'-')).map(c=>parseInt(c.split('-')[1],10)||0); return pre+'-'+String((Math.max(0,...ns)+1)).padStart(3,'0'); }
+
+/* ---------- tela ---------- */
+telaServicos = function(){
+  const pode = can('config.editar'); const f = S.aba.svf || 'todos'; const cat = S.aba.svc || '';
+  const todos = lista('produto').filter(p=>!p.teste).slice().sort((a,b)=>String(a.categoria||'').localeCompare(String(b.categoria||''),'pt-BR') || String(a.codigo||a.nome).localeCompare(String(b.codigo||b.nome),'pt-BR'));
+  const conta = k => todos.filter(p=>k==='todos'||sitDe(p)===k).length;
+  let ps = todos.filter(p=>f==='todos'||sitDe(p)===f); if(cat) ps=ps.filter(p=>p.categoria===cat);
+  const pend = todos.filter(p=>precoDe(p,'BRL')==null || precoDe(p,'EUR')==null).length;
+  const tab = (k,t) => `<button class="${f===k?'on':''}" data-aba="svf:${k}">${t} (${conta(k)})</button>`;
+  const linha = p => { const st=sitDe(p);
+    return `<tr>
+      <td class="num">${esc(p.codigo||'—')}</td>
+      <td style="min-width:200px"><b>${esc(p.nome)}</b>${p.categoria?`<div><span class="chip">${esc(p.categoria)}</span></div>`:''}${(p.descricoes?.pt||p.descricao)?`<div class="small muted">${esc(String(p.descricoes?.pt||p.descricao).slice(0,160))}${String(p.descricoes?.pt||p.descricao).length>160?'…':''}</div>`:''}</td>
+      <td>${esc(COBR[cobrDe(p)]||'—')}</td>
+      <td class="num">${esc(precoTxt(p,'BRL'))}</td>
+      <td class="num">${esc(precoTxt(p,'EUR'))}</td>
+      <td><span class="chip ${SIT_CHIP[st]}">${esc(SIT[st])}</span></td>
+      <td style="white-space:nowrap">${pode?`<div style="display:flex;flex-direction:column;gap:6px"><button class="btn small" data-admin="servico:${p.id}">Editar</button><button class="btn small" data-admin="servicoStatus:${p.id}">Situação</button></div>`:''}</td></tr>`; };
+  return `<div class="pagehead"><div><h1>Serviços e produtos</h1><p class="muted">Catálogo comercial com preço independente no Brasil (R$) e na Irlanda (€). Só os <b>ativos</b> aparecem nas oportunidades e nos protocolos.</p></div>
+    <div class="actions">${pode?'<button class="btn" data-admin="servicoExportar">Baixar planilha</button><button class="btn" data-admin="servicoImportar">Importar planilha</button><button class="btn primary" data-admin="servico">Cadastrar serviço</button>':''}</div></div>
+    <div class="kpis"><div class="kpi"><b>${conta('ativo')}</b><span>Ativos (à venda)</span></div><div class="kpi"><b>${conta('rascunho')}</b><span>Rascunho</span></div><div class="kpi"><b>${conta('aguardando_parceiro')}</b><span>Aguardando parceiro</span></div><div class="kpi"><b>${conta('inativo')}</b><span>Inativos</span></div><div class="kpi"><b style="${pend?'color:var(--warn)':''}">${pend}</b><span>Com preço pendente</span></div></div>
+    <div class="tabs">${tab('todos','Todos')}${tab('ativo','Ativos')}${tab('rascunho','Rascunho')}${tab('aguardando_parceiro','Aguardando parceiro')}${tab('inativo','Inativos')}</div>
+    <div class="actions" style="margin-bottom:10px"><label class="small" for="svCat">Categoria</label><select id="svCat"><option value="">Todas</option>${CAT_COM.map(c=>`<option${c===cat?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    ${ps.length?`<div class="tablewrap"><table class="cards"><thead><tr><th>Código</th><th>Serviço</th><th>Cobrança</th><th>Brasil (R$)</th><th>Irlanda (€)</th><th>Situação</th><th></th></tr></thead><tbody>${ps.map(linha).join('')}</tbody></table></div>`
+      :`<div class="panel empty">Nenhum serviço com esses filtros.${pode?' Use <b>Cadastrar serviço</b> ou <b>Importar planilha</b>.':''}</div>`}
+    <p class="small muted" style="margin-top:10px">Preços em R$ e € são definidos separadamente, sem conversão. "Preço pendente" significa que ainda falta a sua confirmação. O sistema não cobra nem processa pagamentos: ele registra orçamento, pedido e recebimento.</p>`;
+};
+document.addEventListener('change', ev=>{ if(ev.target.id==='svCat'){ S.aba.svc=ev.target.value; render(); } });
+
+/* ---------- formulário ---------- */
+ADMIN.servico = (id) => { exigir(can('config.editar'),'Só o administrador cadastra serviços.'); const p = id ? get(id) : null; const us = lista('unidade');
+  exigir(us.length,'Cadastre uma unidade em Administração antes do primeiro serviço.');
+  const v0 = x => x==null ? '' : String(x).replace('.',',');
+  const campos = [
+    {tipo:'text',nome:'nome',rotulo:'Nome do serviço',obrig:true,valor:p?.nome||''},
+    {tipo:'select',nome:'categoria',rotulo:'Categoria',obrig:true,valor:p?.categoria||'',opcoes:CAT_COM.map(c=>[c,c])},
+    {tipo:'text',nome:'codigo',rotulo:'Código interno',valor:p?.codigo||'',ajuda:'Deixe em branco para gerar (ex.: MUS-007). O código evita duplicidade na importação.'},
+    {tipo:'select',nome:'unidade',rotulo:'Unidade',obrig:true,valor:p?.unidadeId||'',opcoes:us.map(u=>[u.id,u.nome])},
+    {tipo:'select',nome:'tipo',rotulo:'Tipo',obrig:true,valor:p?.tipoProduto||'servico',vazio:false,opcoes:Object.entries(SV_TIPOS)},
+    {tipo:'checks',nome:'mods',rotulo:'Modalidades de atendimento',valor:p?.modalidades||['servico'],opcoes:Object.entries(SV_MODS)},
+    {tipo:'textarea',nome:'desc_pt',rotulo:'Descrição comercial (português)',valor:p?.descricoes?.pt||p?.descricao||''},
+    {tipo:'textarea',nome:'desc_en',rotulo:'Descrição comercial (inglês)',valor:p?.descricoes?.en||''},
+    {tipo:'text',nome:'inclui',rotulo:'O que está incluso',valor:p?.inclui||''},
+    {tipo:'textarea',nome:'regras',rotulo:'Regras de entrega e atendimento',valor:p?.regras||'',ajuda:'Prazo, como é entregue, o que o cliente precisa enviar, limites.'},
+    {tipo:'textarea',nome:'direitos',rotulo:'Direitos de uso (se houver)',valor:p?.direitos||''},
+    {tipo:'text',nome:'preco_brl',rotulo:'Preço no Brasil (R$)',valor:v0(precoDe(p||{},'BRL')),ajuda:'Em branco = Preço pendente. "Gratuito" = sem custo.'},
+    {tipo:'text',nome:'preco_eur',rotulo:'Preço na Irlanda (€)',valor:v0(precoDe(p||{},'EUR')),ajuda:'Definido à parte, sem converter do real.'},
+    {tipo:'text',nome:'custo_brl',rotulo:'Custo base (R$)',valor:v0(custoDe(p||{},'BRL'))},
+    {tipo:'text',nome:'custo_eur',rotulo:'Custo base (€)',valor:v0(custoDe(p||{},'EUR'))},
+    {tipo:'select',nome:'cobranca',rotulo:'Tipo de cobrança',obrig:true,valor:cobrDe(p||{})||'unica',vazio:false,opcoes:Object.entries(COBR)},
+    {tipo:'text',nome:'prazo',rotulo:'Prazo ou duração',valor:p?.prazo||''},
+    {tipo:'select',nome:'status',rotulo:'Situação',obrig:true,valor:p?sitDe(p):'rascunho',vazio:false,opcoes:Object.entries(SIT),ajuda:'Só "Ativo" aparece para a equipe vender.'}];
+  if(p) campos.push({tipo:'text',nome:'motivo',rotulo:'Motivo da alteração',obrig:true});
+  abrirForm({titulo:p?'Editar serviço':'Cadastrar serviço', sub:p?(p.codigo?p.codigo+' · ':'')+p.nome:'Preço em R$ e € independentes.', campos, ok:p?'Salvar alterações':'Cadastrar',
+    onSubmit:async v=>{ exigir(v.mods.length,'Escolha ao menos uma modalidade.');
+      const pb=svNumPreco(v.preco_brl), pe=svNumPreco(v.preco_eur), cb=svNumPreco(v.custo_brl), ce=svNumPreco(v.custo_eur);
+      exigir(![pb,pe,cb,ce].some(x=>Number.isNaN(x)||(x!=null&&x<0)),'Confira os valores: use números como 1.250,00, deixe em branco ou escreva "Gratuito".');
+      exigir(!(v.status==='ativo' && pb==null && pe==null && v.tipo!=='viagem'),'Para ativar, defina o preço em R$ ou em €. (Viagens podem ficar ativas com preço por cotação.)');
+      const codigo=(v.codigo||'').trim().toUpperCase() || (p?.codigo) || proximoCodigo(v.categoria);
+      exigir(!lista('produto').some(x=>x.id!==p?.id && String(x.codigo||'').toUpperCase()===codigo),'Já existe um serviço com o código '+codigo+'.');
+      const dados={codigo, unidadeId:v.unidade, nome:v.nome, categoria:v.categoria, tipoProduto:v.tipo, modalidades:v.mods,
+        descricao:v.desc_pt||null, descricoes:{...(p?.descricoes||{}), pt:v.desc_pt||'', en:v.desc_en||''}, nomes:{...(p?.nomes||{}), pt:v.nome},
+        inclui:v.inclui||null, regras:v.regras||null, direitos:v.direitos||null, precoBRL:pb, precoEUR:pe, custoBRL:cb, custoEUR:ce, precoBase:pb, custoBase:cb,
+        cobranca:v.cobranca, prazo:v.prazo||null, status:v.status, ativo:v.status==='ativo'};
+      if(p){ await alterar(p, dados, 'configuracao', {motivo:v.motivo, detalhe:'Serviço editado: '+codigo+' '+v.nome}); return 'Serviço atualizado'; }
+      exigir(!lista('produto').some(x=>x.unidadeId===v.unidade && String(x.nome).toLowerCase()===v.nome.toLowerCase()),'Já existe um serviço com esse nome nesta unidade.');
+      await criar('produto', dados, 'Serviço cadastrado: '+codigo+' '+v.nome); location.hash='#/servicos'; return 'Serviço '+codigo+' cadastrado'; }});
+};
+ADMIN.servicoStatus = (id) => { exigir(can('config.editar'),'Só o administrador altera serviços.'); const p=get(id); if(!p) return;
+  abrirForm({titulo:'Situação de '+p.nome, sub:'Atual: '+SIT[sitDe(p)]+'. Só "Ativo" aparece para a equipe vender.', campos:[
+    {tipo:'select',nome:'st',rotulo:'Nova situação',obrig:true,valor:sitDe(p),vazio:false,opcoes:Object.entries(SIT)},{tipo:'text',nome:'motivo',rotulo:'Motivo',obrig:true}], ok:'Salvar',
+    onSubmit:async v=>{ exigir(!(v.st==='ativo' && precoDe(p,'BRL')==null && precoDe(p,'EUR')==null && p.tipoProduto!=='viagem'),'Para ativar, defina antes o preço em R$ ou em €.');
+      await alterar(p,{status:v.st,ativo:v.st==='ativo'},'configuracao',{motivo:v.motivo, detalhe:(p.codigo||p.nome)+': '+SIT[v.st]}); return 'Situação: '+SIT[v.st]; }});
+};
+
+/* ---------- planilha: exportar e importar em lote ---------- */
+const COLS = ['codigo','nome','categoria','unidade','tipo','descricao_pt','descricao_en','preco_brl','preco_eur','custo_brl','custo_eur','cobranca','status','prazo','regras','direitos'];
+const csvCel = v => { const s=v==null?'':String(v); return /[;"\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+ADMIN.servicoExportar = async () => {
+  const dl = SV_DL; exigir(dl,'Baixar arquivos não está disponível nesta visualização.');
+  const n = x => x==null ? '' : String(x).replace('.',',');
+  const linhas=[COLS.join(';')].concat(lista('produto').filter(p=>!p.teste).map(p=>[p.codigo||'',p.nome,p.categoria||'',unidade(p.unidadeId)?.codigo||'',p.tipoProduto||'servico',p.descricoes?.pt||p.descricao||'',p.descricoes?.en||'',
+    precoDe(p,'BRL')==null?'Preço pendente':n(precoDe(p,'BRL')), precoDe(p,'EUR')==null?'Preço pendente':n(precoDe(p,'EUR')), n(custoDe(p,'BRL')), n(custoDe(p,'EUR')), cobrDe(p), sitDe(p), p.prazo||'', p.regras||'', p.direitos||''].map(csvCel).join(';')));
+  try { await dl.save({filename:'catalogo-3treeuniverse.csv', data:'﻿'+linhas.join('\r\n')}); toast('Planilha pronta'); } catch(e){ toast(e?.code==='declined'?'Download cancelado.':'Não foi possível baixar ('+(e?.code||'erro')+').'); }
+};
+function lerCatalogo(texto){ const rows=parseCSV(texto); exigir(rows.length>=2,'A planilha precisa de cabeçalho e ao menos uma linha.');
+  const cab=rows[0].map(c=>norm(c).replace(/\s+/g,'_')); const idx={}; COLS.forEach(k=>{ const i=cab.indexOf(k); if(i>=0) idx[k]=i; });
+  exigir(idx.nome!==undefined,'Falta a coluna "nome".'); exigir(idx.categoria!==undefined || idx.codigo!==undefined,'Falta a coluna "categoria" ou "codigo".');
+  return rows.slice(1).map((r,i)=>{ const o={_linha:i+2}; for(const [k,j] of Object.entries(idx)) o[k]=String(r[j]??'').trim(); return o; }).filter(o=>o.nome); }
+async function importarCatalogo(texto, substituirPrecos, arquivo){
+  exigir(can('config.editar'),'Só o administrador importa o catálogo.');
+  const linhas=lerCatalogo(texto); const rel={criados:[],atualizados:[],iguais:[],precosMantidos:[],falhas:[]};
+  const unidadePor = c => { const u=lista('unidade').find(x=>x.codigo===String(c||'').toUpperCase()||x.id===c||x.nome===c); return u?.id; };
+  const unidadePadrao = cat => cat==='TriUniverse Travel' ? unidadePor('TRV') : unidadePor('BIZ');
+  for(const l of linhas){ try {
+    const cat = CAT_COM.find(c=>norm(c)===norm(l.categoria)) || l.categoria || null;
+    const ex = (l.codigo && lista('produto').find(p=>String(p.codigo||'').toUpperCase()===l.codigo.toUpperCase())) || lista('produto').find(p=>!p.teste && norm(p.nome)===norm(l.nome));
+    const pb=svNumPreco(l.preco_brl), pe=svNumPreco(l.preco_eur), cb=svNumPreco(l.custo_brl), ce=svNumPreco(l.custo_eur);
+    exigir(![pb,pe,cb,ce].some(Number.isNaN),'valor inválido');
+    const st = SIT[l.status] ? l.status : (l.status ? (Object.entries(SIT).find(([,t])=>norm(t)===norm(l.status))||[])[0] : null) || (ex?sitDe(ex):'rascunho');
+    const cob = COBR[l.cobranca] ? l.cobranca : ((Object.entries(COBR).find(([,t])=>norm(t)===norm(l.cobranca))||[])[0] || (ex?cobrDe(ex):'unica'));
+    const tipo = SV_TIPOS[l.tipo] ? l.tipo : (ex?.tipoProduto || (cat==='TriUniverse Travel'?'viagem':'servico'));
+    const dados = {nome:l.nome, categoria:cat, tipoProduto:tipo, cobranca:cob, status:st};
+    if(l.unidade || !ex) dados.unidadeId = unidadePor(l.unidade) || ex?.unidadeId || unidadePadrao(cat);
+    if(!ex) dados.modalidades = [tipo==='viagem'?'viagem':'servico'];
+    if(l.descricao_pt) { dados.descricao=l.descricao_pt; } if(l.descricao_pt||l.descricao_en) dados.descricoes={...(ex?.descricoes||{}), ...(l.descricao_pt?{pt:l.descricao_pt}:{}), ...(l.descricao_en?{en:l.descricao_en}:{})};
+    for(const k of ['prazo','regras','direitos']) if(l[k]) dados[k]=l[k];
+    const preco = (campo, novo, atual) => { if(novo===null && l[campo.replace('preco','preco_').toLowerCase()]===undefined) return; if(atual==null || substituirPrecos || novo===atual) dados[campo]=novo; else if(novo!==atual) rel.precosMantidos.push(`${l.nome}: ${campo==='precoBRL'?'R$':'€'} mantido ${atual} (planilha: ${novo==null?'pendente':novo})`); };
+    preco('precoBRL', pb, ex?precoDe(ex,'BRL'):null); preco('precoEUR', pe, ex?precoDe(ex,'EUR'):null);
+    if(cb!=null) dados.custoBRL=cb; if(ce!=null) dados.custoEUR=ce;
+    if('precoBRL' in dados) dados.precoBase=dados.precoBRL; if('custoBRL' in dados) dados.custoBase=dados.custoBRL;
+    const pBRL = 'precoBRL' in dados ? dados.precoBRL : (ex?precoDe(ex,'BRL'):null), pEUR = 'precoEUR' in dados ? dados.precoEUR : (ex?precoDe(ex,'EUR'):null);
+    if(dados.status==='ativo' && pBRL==null && pEUR==null && tipo!=='viagem' && !(ex && sitDe(ex)==='ativo')) { dados.status = ex ? sitDe(ex) : 'rascunho'; rel.precosMantidos.push(l.nome+': sem preço, não foi ativado'); }
+    dados.ativo = dados.status==='ativo';
+    if(ex){ const mud={}; for(const [k,v] of Object.entries(dados)) if(JSON.stringify(ex[k])!==JSON.stringify(v)) mud[k]=v;
+      if(!ex.codigo) mud.codigo = (l.codigo||proximoCodigo(cat)).toUpperCase();
+      if(!Object.keys(mud).length){ rel.iguais.push(ex.codigo||ex.nome); continue; }
+      await alterar(ex, mud, 'configuracao', {motivo:'importação de catálogo'+(arquivo?' ('+arquivo+')':''), detalhe:'Atualizado: '+(mud.codigo||ex.codigo||'')+' '+l.nome}); rel.atualizados.push(mud.codigo||ex.codigo||l.nome); }
+    else { dados.codigo=(l.codigo||proximoCodigo(cat)).toUpperCase(); await criar('produto', dados, 'Importação de catálogo: '+dados.codigo+' '+l.nome); rel.criados.push(dados.codigo); }
+  } catch(e){ rel.falhas.push('linha '+l._linha+' ('+l.nome+'): '+(e.message||e)); } }
+  await criar('importacao',{campanhaId:null, unidadeId:null, arquivo:arquivo||'colado', origemBase:'catálogo de produtos', total:linhas.length, importados:rel.criados.length, atualizados:rel.atualizados.length, iguais:rel.iguais.length, falhas:rel.falhas, precosMantidos:rel.precosMantidos, duplicados:0, naoContatar:0, invalidos:rel.falhas.length, jaClientes:0},'Importação de catálogo');
+  return rel; }
+ADMIN.servicoImportar = () => { exigir(can('config.editar'),'Só o administrador importa o catálogo.');
+  abrirForm({titulo:'Importar planilha de serviços', sub:'Cria o que é novo e atualiza o que já existe pelo código (ou pelo nome). Não duplica.', campos:[
+    {tipo:'info',html:'<p class="small">Colunas (separadas por ponto e vírgula): <code>'+COLS.join(';')+'</code>. Dica: use <b>Baixar planilha</b> para ter o modelo já preenchido.</p>'},
+    {tipo:'file',nome:'arq',rotulo:'Arquivo CSV'},
+    {tipo:'textarea',nome:'txt',rotulo:'Ou cole o conteúdo aqui'},
+    {tipo:'checks',nome:'subst',rotulo:'Preços',opcoes:[['sim','Autorizo substituir preços que já estão cadastrados']],ajuda:'Sem marcar, preços existentes são mantidos e listados no resultado.'}], ok:'Importar',
+    onSubmit:async v=>{ const f=document.querySelector('#modalForm input[name="arq"]')?.files?.[0]; const texto = f ? await f.text() : v.txt; exigir(texto && texto.trim(),'Escolha um arquivo ou cole a planilha.');
+      const r=await importarCatalogo(texto, v.subst.includes('sim'), f?f.name:'colado');
+      return `${r.criados.length} criado(s) · ${r.atualizados.length} atualizado(s) · ${r.iguais.length} sem mudança · ${r.precosMantidos.length} preço(s) mantido(s) · ${r.falhas.length} falha(s)`; }});
+};
+
+/* ---------- moeda no fluxo comercial ---------- */
+function moedaPadrao(prod){ if(!prod) return 'BRL'; return precoDe(prod,'BRL')==null && precoDe(prod,'EUR')!=null ? 'EUR' : 'BRL'; }
+function itensIniciais(lead){ const p=produto(lead?.produtoId); if(!p) return undefined; const m=lead.moeda||'BRL'; const v=precoDe(p,m); const c=custoDe(p,m);
+  return [{descricao:p.nome+(p.codigo?' ('+p.codigo+')':''), fornecedor:'', custo:c??'', taxas:'', preco:v??''}]; }
+
 </script>
 
 <script>
